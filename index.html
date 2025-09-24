@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Ocorrências de Roubos</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <!-- PapaParse para ler arquivos CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        /* Estilo para a fonte e scrollbars */
+        body {
+            font-family: 'Inter', sans-serif;
+            -ms-overflow-style: none; /* IE and Edge */
+            scrollbar-width: none; /* Firefox */
+        }
+        body::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, and Opera */
+        }
+        /* Estilo para o loader */
+        #loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .chart-container {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200">
+
+    <div id="loader"></div>
+
+    <div id="dashboard-content" class="container mx-auto p-4 md:p-6 opacity-0 transition-opacity duration-500">
+        <!-- Cabeçalho -->
+        <header class="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
+            <h1 class="text-2xl md:text-3xl font-bold text-white">Dashboard de Análise de Roubos</h1>
+            <div>
+                <label for="fileUpload" class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center transition-colors">
+                    <i data-lucide="upload" class="mr-2 h-5 w-5"></i>
+                    <span>Atualizar Planilha (.csv)</span>
+                </label>
+                <input type="file" id="fileUpload" class="hidden" accept=".csv">
+            </div>
+        </header>
+
+        <!-- Cartões de KPIs -->
+        <div id="kpi-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <!-- Os cartões de KPI serão inseridos aqui pelo JavaScript -->
+        </div>
+
+        <!-- Análises Temporais -->
+        <div class="bg-gray-800 p-4 rounded-lg shadow mb-6">
+            <h2 class="text-xl font-semibold mb-4 text-white">Análise Temporal Comparativa</h2>
+            <div class="flex flex-wrap gap-4 mb-4">
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">Ano 1</label>
+                    <select id="yearA" class="bg-gray-700 text-white rounded px-2 py-1">
+                        <!-- Opções serão preenchidas pelo JS -->
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">Ano 2</label>
+                    <select id="yearB" class="bg-gray-700 text-white rounded px-2 py-1">
+                        <!-- Opções serão preenchidas pelo JS -->
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">Trimestre</label>
+                    <select id="quarter" class="bg-gray-700 text-white rounded px-2 py-1">
+                        <option value="1">1º</option>
+                        <option value="2">2º</option>
+                        <option value="3">3º</option>
+                        <option value="4">4º</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">Semestre</label>
+                    <select id="semester" class="bg-gray-700 text-white rounded px-2 py-1">
+                        <option value="1">1º</option>
+                        <option value="2">2º</option>
+                    </select>
+                </div>
+            </div>
+            <div id="temporal-analysis" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                <!-- Análises trimestrais e semestrais aqui -->
+            </div>
+        </div>
+
+
+        <!-- Gráficos Principais -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+             <div class="bg-gray-800 p-4 rounded-lg shadow">
+                <h2 class="text-xl font-semibold mb-2">Ocorrências por Hora do Dia</h2>
+                <div class="chart-container"><canvas id="hourlyChart"></canvas></div>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-lg shadow">
+                <h2 class="text-xl font-semibold mb-2">Ocorrências por Dia da Semana</h2>
+                <div class="chart-container"><canvas id="dayOfWeekChart"></canvas></div>
+            </div>
+        </div>
+        
+        <!-- Gráficos de Distribuição -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div class="bg-gray-800 p-4 rounded-lg shadow flex flex-col">
+                <h2 class="text-xl font-semibold mb-2">Distribuição por Tipo de Roubo</h2>
+                <div class="chart-container flex-grow"><canvas id="theftTypeChart"></canvas></div>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-lg shadow flex flex-col">
+                 <h2 class="text-xl font-semibold mb-2">Top 10 Bairros</h2>
+                 <div id="topBairros" class="flex-grow overflow-y-auto pr-2"></div>
+            </div>
+             <div class="bg-gray-800 p-4 rounded-lg shadow flex flex-col">
+                <h2 class="text-xl font-semibold mb-2">Ocorrências por Turno</h2>
+                <div class="chart-container flex-grow"><canvas id="shiftChart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Tabela de Cruzamento de Dados -->
+        <div class="bg-gray-800 p-4 rounded-lg shadow">
+            <h2 class="text-xl font-semibold mb-4">Análise dos 5 Endereços com Mais Ocorrências</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left table-auto">
+                    <thead>
+                        <tr class="border-b border-gray-600">
+                           <th class="p-3">Endereço</th>
+                           <th class="p-3 text-center">Ocorrências</th>
+                           <th class="p-3">Dia Crítico</th>
+                           <th class="p-3">Hora Mais Frequente</th> <!-- alterado aqui -->
+                           <th class="p-3">Tipo de Roubo Comum</th>
+                        </tr>
+                    </thead>
+                    <tbody id="topAddressesTableBody">
+                        <!-- Linhas da tabela serão inseridas aqui -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Adicione logo abaixo da tabela dos 5 endereços com mais ocorrências -->
+        <div class="bg-gray-800 p-4 rounded-lg shadow mt-6">
+            <h2 class="text-xl font-semibold mb-4">Top 10 Locais com Mais Ocorrências</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left table-auto">
+                    <thead>
+                        <tr class="border-b border-gray-600">
+                            <th class="p-3">Local</th>
+                            <th class="p-3 text-center">Ocorrências</th>
+                            <th class="p-3">Dia Mais Frequente</th>
+                            <th class="p-3">Hora Mais Frequente</th>
+                            <th class="p-3">Tipo de Furto Mais Frequente</th>
+                        </tr>
+                    </thead>
+                    <tbody id="topLocalsTableBody">
+                        <!-- Linhas da tabela serão inseridas aqui pelo JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Referências aos elementos do DOM
+    const loader = document.getElementById('loader');
+    const dashboardContent = document.getElementById('dashboard-content');
+    const fileUploadInput = document.getElementById('fileUpload');
+
+    // Estado global para armazenar instâncias de gráficos
+    let chartInstances = {};
+
+    // Função para destruir gráficos existentes antes de recriá-los
+    const destroyCharts = () => {
+        Object.values(chartInstances).forEach(chart => chart.destroy());
+        chartInstances = {};
+    };
+
+    // Função para encontrar o valor mais frequente (moda) em um array
+    const getMode = (arr) => {
+        if (arr.length === 0) return 'N/A';
+        return arr.reduce(
+            (a, b, i, arr) =>
+                (arr.filter(v => v === a).length >= arr.filter(v => v === b).length ? a : b),
+            null
+        );
+    };
+
+    // Função principal para processar dados e atualizar o dashboard
+    // (Removido: função duplicada 'updateDashboard')
+
+    // Renderiza os cartões de KPIs
+    const renderKPIs = (data) => {
+        const kpiContainer = document.getElementById('kpi-cards');
+        if (!data.length) {
+            kpiContainer.innerHTML = `<p class="col-span-4 text-center">Sem dados para exibir KPIs.</p>`;
+            return;
+        }
+
+        const totalRecords = data.length;
+
+        // Descobre o maior período de 2025
+        const lastDate2025 = data
+            .filter(d => d.year === 2025)
+            .reduce((max, curr) => curr.fullDate > max ? curr.fullDate : max, new Date('2000-01-01'));
+
+        // Filtra 2025 até a última data
+        const records2025 = data.filter(d => d.year === 2025 && d.fullDate <= lastDate2025).length;
+
+        // Filtra 2024 até o mesmo período
+        const records2024 = data.filter(d => d.year === 2024 && d.fullDate <= new Date(lastDate2025.setFullYear(2024))).length;
+
+        let yearComparison = 0;
+        if (records2024 > 0) {
+            yearComparison = ((records2025 - records2024) / records2024) * 100;
+        } else if (records2025 > 0) {
+            yearComparison = 100;
+        }
+        
+        const hourlyCounts = data.reduce((acc, curr) => {
+            acc[curr.hour] = (acc[curr.hour] || 0) + 1;
+            return acc;
+        }, {});
+        
+        const criticalHour = Object.keys(hourlyCounts).length > 0
+            ? Object.keys(hourlyCounts).reduce((a, b) => hourlyCounts[a] > hourlyCounts[b] ? a : b)
+            : 'N/A';
+
+        const topTheftType = getMode(data.map(d => d['TIPO DE ROUBO']));
+        
+        const kpis = [
+            { label: 'Total de Ocorrências', value: totalRecords.toLocaleString('pt-BR'), icon: 'shield-alert' },
+            { 
+                label: `Variação Anual (2024 vs 2025, mesmo período)`, 
+                value: `${yearComparison.toFixed(1)}%`, 
+                icon: yearComparison >= 0 ? 'trending-up' : 'trending-down',
+                color: yearComparison >= 0 ? 'text-red-400' : 'text-green-400'
+            },
+            { label: 'Horário de Pico', value: criticalHour !== 'N/A' ? `${String(criticalHour).padStart(2, '0')}:00 - ${String(parseInt(criticalHour)+1).padStart(2,'0')}:00` : 'N/A', icon: 'clock' },
+            { label: 'Principal Tipo de ROUBO', value: topTheftType, icon: 'swords' }
+        ];
+
+        kpiContainer.innerHTML = kpis.map(kpi => `
+            <div class="bg-gray-800 p-4 rounded-lg shadow flex items-center">
+                <div class="bg-gray-700 p-3 rounded-lg mr-4">
+                    <i data-lucide="${kpi.icon}" class="h-8 w-8 ${kpi.color || 'text-blue-400'}"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-400">${kpi.label}</p>
+                    <p class="text-2xl font-bold">${kpi.value}</p>
+                </div>
+            </div>
+        `).join('');
+        lucide.createIcons();
+    };
+
+    // Renderiza as análises temporais
+    const renderTemporalAnalysis = (data) => {
+        const container = document.getElementById('temporal-analysis');
+        if (!data.length) {
+            container.innerHTML = `<p class="col-span-3 text-center">Sem dados para exibir.</p>`;
+            return;
+        }
+
+        // Preenche os selects de ano dinamicamente
+        const years = [...new Set(data.map(d => d.year))].sort();
+        const yearASelect = document.getElementById('yearA');
+        const yearBSelect = document.getElementById('yearB');
+        if (yearASelect.options.length === 0) {
+            years.forEach(y => {
+                yearASelect.innerHTML += `<option value="${y}">${y}</option>`;
+                yearBSelect.innerHTML += `<option value="${y}">${y}</option>`;
+            });
+            yearASelect.value = years[0];
+            yearBSelect.value = years[years.length - 1];
+        }
+
+        // Pega valores selecionados
+        const yearA = parseInt(yearASelect.value);
+        const yearB = parseInt(yearBSelect.value);
+        const quarter = parseInt(document.getElementById('quarter').value);
+        const semester = parseInt(document.getElementById('semester').value);
+
+        const getQuarter = (date) => Math.floor(date.getMonth() / 3) + 1;
+        const getSemester = (date) => Math.floor(date.getMonth() / 6) + 1;
+
+        // Filtra os dados por ano e trimestre/semestre
+        const quarterA = data.filter(d => d.year === yearA && getQuarter(d.fullDate) === quarter).length;
+        const quarterB = data.filter(d => d.year === yearB && getQuarter(d.fullDate) === quarter).length;
+
+        const semesterA = data.filter(d => d.year === yearA && getSemester(d.fullDate) === semester).length;
+        const semesterB = data.filter(d => d.year === yearB && getSemester(d.fullDate) === semester).length;
+
+        // Variação percentual
+        const quarterChange = quarterA > 0 ? ((quarterB - quarterA) / quarterA) * 100 : 0;
+        const semesterChange = semesterA > 0 ? ((semesterB - semesterA) / semesterA) * 100 : 0;
+
+        container.innerHTML = `
+            <div>
+                <p class="text-sm text-gray-400">Trimestre ${quarter} (${yearA} vs ${yearB})</p>
+                <p class="text-xl font-bold">${quarterA} vs ${quarterB}</p>
+                <p class="font-semibold ${quarterChange >= 0 ? 'text-red-400' : 'text-green-400'}">${quarterChange.toFixed(1)}%</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-400">Semestre ${semester} (${yearA} vs ${yearB})</p>
+                <p class="text-xl font-bold">${semesterA} vs ${semesterB}</p>
+                <p class="font-semibold ${semesterChange >= 0 ? 'text-red-400' : 'text-green-400'}">${semesterChange.toFixed(1)}%</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-400">Total Anual (${yearB})</p>
+                <p class="text-xl font-bold">${data.filter(d => d.year === yearB).length}</p>
+                <p class="font-semibold text-gray-400">Ocorrências</p>
+            </div>
+        `;
+    };
+
+    // Adicione listeners para atualizar ao mudar os selects
+    ['yearA', 'yearB', 'quarter', 'semester'].forEach(id => {
+        document.getElementById(id).addEventListener('change', () => {
+            renderTemporalAnalysis(window._dashboardData || []);
+        });
+    });
+
+    // Funções de renderização de gráficos e tabelas
+    const renderCharts = (data) => {
+        renderHourlyChart(data);
+        renderDayOfWeekChart(data);
+        renderTheftTypeChart(data);
+        renderShiftChart(data);
+    };
+
+    const createOrUpdateChart = (id, type, labels, dataArr, title) => {
+        const ctx = document.getElementById(id).getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)');
+        gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
+
+        chartInstances[id] = new Chart(ctx, {
+            type: type,
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: title,
+                    data: dataArr,
+                    backgroundColor: type === 'bar' ? gradient : ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#6b7280', '#f97316', '#14b8a6', '#d946ef'],
+                    borderColor: '#3B82F6',
+                    borderWidth: type === 'bar' ? 2 : 0,
+                    pointBackgroundColor: '#fff',
+                    pointBorderColor: '#3B82F6',
+                    fill: type === 'bar' ? true : false,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: type !== 'bar',
+                        position: 'bottom',
+                        labels: { color: '#d1d5db' }
+                    }
+                },
+                scales: type.includes('bar') ? {
+                    y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+                    x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } }
+                } : {}
+            }
+        });
+    };
+
+    // Gráfico de ocorrências por hora
+    const renderHourlyChart = (data) => {
+        const hourlyCounts = Array(24).fill(0);
+        data.forEach(row => hourlyCounts[row.hour]++);
+        const labels = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
+        createOrUpdateChart('hourlyChart', 'bar', labels, hourlyCounts, 'Ocorrências');
+    };
+
+    // Gráfico de ocorrências por dia da semana
+    const renderDayOfWeekChart = (data) => {
+        const dayOrder = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+        const dayCounts = data.reduce((acc, curr) => {
+            const day = curr['DIA DA SEMANA'] ? curr['DIA DA SEMANA'].toLowerCase() : 'indefinido';
+            acc[day] = (acc[day] || 0) + 1;
+            return acc;
+        }, {});
+        const labels = dayOrder.map(d => d.charAt(0).toUpperCase() + d.slice(1));
+        const chartData = dayOrder.map(day => dayCounts[day] || 0);
+        createOrUpdateChart('dayOfWeekChart', 'bar', labels, chartData, 'Ocorrências');
+    };
+
+    // Gráfico de tipos de ROUBO
+    const renderTheftTypeChart = (data) => {
+        const typeCounts = data.reduce((acc, curr) => {
+            const type = curr['TIPO DE ROUBO'];
+            acc[type] = (acc[type] || 0) + 1;
+            return acc;
+        }, {});
+        const sortedTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
+        createOrUpdateChart('theftTypeChart', 'doughnut', sortedTypes.map(e => e[0]), sortedTypes.map(e => e[1]), 'Tipo de ROUBO');
+    };
+
+    // Gráfico por turno
+    const renderShiftChart = (data) => {
+        const shifts = { 'Madrugada (00-06)': 0, 'Manhã (06-12)': 0, 'Tarde (12-18)': 0, 'Noite (18-00)': 0 };
+        data.forEach(row => {
+            const hour = row.hour;
+            if (hour >= 0 && hour < 6) shifts['Madrugada (00-06)']++;
+            else if (hour >= 6 && hour < 12) shifts['Manhã (06-12)']++;
+            else if (hour >= 12 && hour < 18) shifts['Tarde (12-18)']++;
+            else shifts['Noite (18-00)']++;
+        });
+        createOrUpdateChart('shiftChart', 'pie', Object.keys(shifts), Object.values(shifts), 'Turno');
+    };
+    
+    // Renderiza rankings de bairros
+    const renderRankings = (data) => {
+        const container = document.getElementById('topBairros');
+        const bairroCounts = data.reduce((acc, curr) => {
+            const bairro = curr.BAIRRO || 'Não informado';
+            acc[bairro] = (acc[bairro] || 0) + 1;
+            return acc;
+        }, {});
+        const sortedBairros = Object.entries(bairroCounts).sort((a,b) => b[1] - a[1]).slice(0, 10);
+        
+        container.innerHTML = sortedBairros.map(([bairro, count]) => `
+            <div class="flex justify-between items-center mb-2 p-2 bg-gray-700/50 rounded">
+                <span class="text-sm">${bairro}</span>
+                <span class="font-bold text-blue-300">${count.toLocaleString('pt-BR')}</span>
+            </div>
+        `).join('');
+    };
+    
+    // Renderiza a tabela de cruzamento de dados
+    const renderTopAddressesTable = (data) => {
+        const tableBody = document.getElementById('topAddressesTableBody');
+        const addressCounts = data.reduce((acc, curr) => {
+            const address = curr['ENDEREÇO'] || 'Não informado';
+            acc[address] = (acc[address] || 0) + 1;
+            return acc;
+        }, {});
+        
+        const top5 = Object.entries(addressCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+        if (top5.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center p-4">Nenhum dado de endereço para analisar.</td></tr>`;
+            return;
+        }
+
+        const tableContent = top5.map(([address, count]) => {
+            const addressData = data.filter(row => row['ENDEREÇO'] === address);
+            const mostFrequentDay = getMode(addressData.map(d => d['DIA DA SEMANA']));
+            // NOVO: hora mais frequente
+            const mostFrequentHour = getMode(addressData.map(d => 
+                d.hour !== undefined ? `${String(d.hour).padStart(2, '0')}:00` : 'N/A'
+            ));
+            const mostFrequentTheftType = getMode(addressData.map(d => d['TIPO DE ROUBO']));
+            return `
+                <tr class="border-b border-gray-700 hover:bg-gray-700/50">
+                    <td class="p-3 font-medium">${address}</td>
+                    <td class="p-3 text-center font-bold">${count}</td>
+                    <td class="p-3">${mostFrequentDay}</td>
+                    <td class="p-3">${mostFrequentHour}</td>
+                    <td class="p-3">${mostFrequentTheftType}</td>
+                </tr>
+            `;
+        }).join('');
+        tableBody.innerHTML = tableContent;
+    };
+
+    // Renderiza a tabela de locais com mais ocorrências
+    const renderTopLocalsTable = (data) => {
+        const tableBody = document.getElementById('topLocalsTableBody');
+        const localCounts = data.reduce((acc, curr) => {
+            const local = curr['LOCAL'] || 'Não informado';
+            acc[local] = (acc[local] || 0) + 1;
+            return acc;
+        }, {});
+        const top10 = Object.entries(localCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+        if (top10.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center p-4">Nenhum dado de local para analisar.</td></tr>`;
+            return;
+        }
+
+        const tableContent = top10.map(([local, count]) => {
+            const localData = data.filter(row => (row['LOCAL'] || 'Não informado') === local);
+            const mostFrequentDay = getMode(localData.map(d => d['DIA DA SEMANA']));
+            const mostFrequentHour = getMode(localData.map(d =>
+                d.hour !== undefined ? `${String(d.hour).padStart(2, '0')}:00` : 'N/A'
+            ));
+            // Para roubos, use o campo correto:
+            const mostFrequentTheftType = getMode(localData.map(d => d['TIPO DE ROUBO']));
+            return `
+                <tr class="border-b border-gray-700 hover:bg-gray-700/50">
+                    <td class="p-3 font-medium">${local}</td>
+                    <td class="p-3 text-center font-bold">${count}</td>
+                    <td class="p-3">${mostFrequentDay}</td>
+                    <td class="p-3">${mostFrequentHour}</td>
+                    <td class="p-3">${mostFrequentTheftType}</td>
+                </tr>
+            `;
+        }).join('');
+        tableBody.innerHTML = tableContent;
+    };
+
+    // Atualiza o dashboard (única definição)
+    const updateDashboard = (data) => {
+        window._dashboardData = data;
+        loader.style.display = 'block';
+        dashboardContent.classList.add('opacity-0');
+        destroyCharts();
+        
+        // Simula um pequeno delay para a renderização, melhorando a experiência do usuário
+        setTimeout(() => {
+            // 1. Limpeza e pré-processamento dos dados
+            const validData = data.filter(row => row.DATA && row.HORA && row['TIPO DE ROUBO']);
+            
+            validData.forEach(row => {
+                // Tratamento de datas inválidas que podem vir do CSV
+                const dateParts = row.DATA.split(/[-/]/);
+                let formattedDate;
+                if (dateParts.length === 3) {
+                     // Assumindo formato YYYY-MM-DD ou DD/MM/YYYY
+                    if (dateParts[0].length === 4) {
+                        formattedDate = `${dateParts[0]}-${dateParts[1]}-${dateParts[2]}`;
+                    } else {
+                        formattedDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
+                    }
+                    try {
+                        row.fullDate = new Date(`${formattedDate}T${row.HORA}`);
+                        // Adicione este log para conferir os anos processados
+                        console.log("Anos encontrados:", [...new Set(validData.map(r => r.year))]);
+                        if (row.fullDate && !isNaN(row.fullDate)) {
+                            row.year = row.fullDate.getFullYear();
+                            row.hour = row.fullDate.getHours();
+                        }
+                    } catch(e) {
+                        console.warn('Data inválida encontrada:', row.DATA, row.HORA);
+                        row.fullDate = null;
+                    }
+                } else {
+                    row.fullDate = null;
+                }
+            });
+            
+            const processedData = validData.filter(row => row.fullDate && !isNaN(row.fullDate));
+
+            // 2. Renderiza todos os componentes do dashboard
+            renderKPIs(processedData);
+            renderTemporalAnalysis(processedData);
+            renderCharts(processedData);
+            renderRankings(processedData);
+            renderTopAddressesTable(processedData);
+            renderTopLocalsTable(processedData); // NOVO: renderiza a tabela de locais
+
+            loader.style.display = 'none';
+            dashboardContent.classList.remove('opacity-0');
+        }, 500);
+    };
+    
+    // Carrega os dados iniciais do arquivo CSV local
+const loadInitialData = () => {
+    // Usar um nome de arquivo simples e sem espaços
+    const fileName = 'dados_roubos.csv';
+    fetch(fileName)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro na rede: ${response.statusText}`);
+            }
+            return response.text();
+        })
+        .then(csvText => {
+            Papa.parse(csvText, {
+                header: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    updateDashboard(results.data);
+                },
+                error: (error) => {
+                    console.error('Erro ao analisar o CSV inicial:', error);
+                    loader.innerText = "Erro ao carregar dados iniciais.";
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Erro ao buscar o arquivo CSV inicial:', error);
+            loader.style.display = 'none';
+            dashboardContent.innerHTML = `<div class="text-center text-red-400 p-8">Não foi possível carregar os dados. <strong>Por favor, renomeie seu arquivo para 'dados_roubos.csv'</strong> e certifique-se de que ele está na mesma pasta que este arquivo HTML.</div>`;
+            dashboardContent.classList.remove('opacity-0');
+        });
+};
+
+    // Configura o listener para o upload de novos arquivos
+    fileUploadInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    updateDashboard(results.data);
+                },
+                error: (error) => {
+                    alert('Ocorreu um erro ao processar o arquivo CSV.');
+                    console.error('Erro no upload:', error);
+                }
+            });
+        }
+    });
+
+    // Inicia a aplicação
+    loadInitialData();
+    lucide.createIcons();
+});
+</script>
+</body>
+</html>
+
